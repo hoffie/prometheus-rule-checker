@@ -59,6 +59,13 @@ func TestExpandRegexpMatchers(t *testing.T) {
 			},
 		},
 		{
+			i: "foo{bar!=\"a\",bar=~\"a|b\"}",
+			o: []string{
+				"foo{bar!=\"a\",bar=~\"a\"}",
+				"foo{bar!=\"a\",bar=~\"b\"}",
+			},
+		},
+		{
 			i: "foo{a=\"1\",bar=~\"a|b|c\",z=\"2\",splitlater=~\"x|y|z\"}",
 			o: []string{
 				"foo{a=\"1\",bar=~\"a\",z=\"2\",splitlater=~\"x|y|z\"}",

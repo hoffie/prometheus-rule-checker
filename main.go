@@ -191,7 +191,7 @@ func expandRegexpMatchers(matchers []*labels.Matcher) [][]*labels.Matcher {
 			e := make([]*labels.Matcher, len(matchers))
 			for i, n := range matchers {
 				var mCopy labels.Matcher
-				if n.Name == candidateLabel {
+				if n.Name == candidateLabel && n.Type == labels.MatchRegexp {
 					n.Value = alt
 				}
 				mCopy = *n
