@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/prometheus/prometheus/pkg/labels"
 	promql "github.com/prometheus/prometheus/promql/parser"
@@ -15,8 +16,9 @@ import (
 )
 
 var (
-	verbose = kingpin.Flag("verbose", "Verbose mode.").Short('v').Bool()
-	url     = kingpin.Flag("prometheus.url", "prometheus base URL").Required().String()
+	verbose  = kingpin.Flag("verbose", "Verbose mode.").Short('v').Bool()
+	url      = kingpin.Flag("prometheus.url", "prometheus base URL").Required().String()
+	waitTime = kingpin.Flag("wait.seconds", "seconds to wait between count requests").Default("0.01").Float()
 )
 
 func main() {
@@ -125,6 +127,7 @@ func checkQuery(query string) error {
 			}
 			continue
 		}
+		time.Sleep(time.Duration(*waitTime) * time.Second)
 		c := getResultCount(selector)
 		if c < 1 {
 			return fmt.Errorf("No results, possibly wrong metric name or impossible selector: %s", selector)
