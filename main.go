@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/prometheus/prometheus/pkg/labels"
 	promql "github.com/prometheus/prometheus/promql/parser"
@@ -105,9 +106,10 @@ func checkQuery(query string) error {
 	}
 	log.WithFields(log.Fields{"len(selectors)": len(selectors)}).Debug("Found selectors")
 
-	for _, selector := range selectors {
+	var selector string
+	for len(selectors) > 0 {
+		selector, selectors = selectors[0], selectors[1:]
 		log.WithFields(log.Fields{"selector": selector}).Debug("Checking selector")
-		// TODO: expand simple regexps (a|b|c) and check explicitly
 		matchers, err := promql.ParseMetricSelector(selector)
 		if err != nil {
 			log.WithFields(log.Fields{"err": err}).Fatal("Metric selector parsing failed")
@@ -115,6 +117,13 @@ func checkQuery(query string) error {
 		if ignoreMatchers(matchers) {
 			log.WithFields(log.Fields{"selector": selector}).Debug("Not checking ignored metric")
 			break
+		}
+		expanded := expandRegexpMatchers(matchers)
+		if len(expanded) != 0 {
+			for _, e := range expanded {
+				selectors = append(selectors, labelMatchersToString(e))
+			}
+			continue
 		}
 		c := getResultCount(selector)
 		if c < 1 {
@@ -141,6 +150,50 @@ func ignoreMatchers(matchers []*labels.Matcher) bool {
 	return false
 }
 
+// expandRegexpMatchers walks the given list of label matchers and
+// attempts to expand the first found expandable regexp matcher.
+// A regexp matcher is expandable if it is a simple list of alternatives in the
+// form a|b|c.
+// foo=~"a|b|c" will be turned into
+//   foo=~"a"
+//   foo=~"b"
+//   foo=~"c"
+// This function is supposed to handle the common, trivial case. It is not
+// able to handle arbitrarily complex regexp.
+func expandRegexpMatchers(matchers []*labels.Matcher) [][]*labels.Matcher {
+	expanded := make([][]*labels.Matcher, 0)
+	var alternatives []string
+	for _, m := range matchers {
+		if m.Type != labels.MatchRegexp {
+			continue
+		}
+		if strings.ContainsAny(m.Value, "()\\") {
+			continue
+		}
+		alternatives = strings.Split(m.Value, "|")
+		if len(alternatives) < 2 {
+			continue
+		}
+		candidateLabel := m.Name
+		for _, alt := range alternatives {
+			e := make([]*labels.Matcher, len(matchers))
+			for i, n := range matchers {
+				var mCopy labels.Matcher
+				if n.Name == candidateLabel {
+					n.Value = alt
+				}
+				mCopy = *n
+				e[i] = &mCopy
+			}
+			expanded = append(expanded, e)
+		}
+		return expanded
+	}
+	return expanded
+}
+
+// getResultCount queries the Prometheus API and counts the number of results
+// for the given selector.
 func getResultCount(selector string) uint64 {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/query", *url), nil)
 	if err != nil {
@@ -209,4 +262,20 @@ func getSelectors(query string) ([]string, error) {
 	var path []promql.Node
 	promql.Walk(v, expr, path)
 	return v.selectors, nil
+}
+
+// labelMatchersToString takes a list of label matchers
+// and re-constructs a VectorSelector in string format from it.
+func labelMatchersToString(lms []*labels.Matcher) string {
+	name := ""
+	for _, lm := range lms {
+		if lm.Name == labels.MetricName {
+			name = lm.Value
+		}
+	}
+	vs := promql.VectorSelector{
+		Name:          name,
+		LabelMatchers: lms,
+	}
+	return vs.String()
 }
