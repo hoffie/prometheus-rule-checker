@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 
@@ -36,7 +36,7 @@ func checkRules() {
 		log.WithFields(log.Fields{"err": err}).Fatal("Rule request failed")
 	}
 
-	b, err := io.ReadAll(resp.Body)
+	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.WithFields(log.Fields{"err": err}).Fatal("Body reading failed")
 	}
@@ -125,7 +125,7 @@ func getResultCount(selector string) uint64 {
 		log.WithFields(log.Fields{"err": err}).Fatal("Rule request failed")
 	}
 
-	b, err := io.ReadAll(resp.Body)
+	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.WithFields(log.Fields{"err": err}).Fatal("Body reading failed")
 	}
