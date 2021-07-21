@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/prometheus/prometheus/pkg/labels"
 	promql "github.com/prometheus/prometheus/promql/parser"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -101,12 +102,36 @@ func checkQuery(query string) error {
 
 	for _, selector := range selectors {
 		log.WithFields(log.Fields{"selector": selector}).Debug("Checking selector")
+		// TODO: expand simple regexps (a|b|c) and check explicitly
+		matchers, err := promql.ParseMetricSelector(selector)
+		if err != nil {
+			log.WithFields(log.Fields{"err": err}).Fatal("Metric selector parsing failed")
+		}
+		if ignoreMatchers(matchers) {
+			log.WithFields(log.Fields{"selector": selector}).Debug("Not checking ignored metric")
+			break
+		}
 		c := getResultCount(selector)
 		if c < 1 {
 			return fmt.Errorf("No results, possibly wrong metric name or impossible selector: %s", selector)
 		}
 	}
 	return nil
+}
+
+func ignoreMatchers(matchers []*labels.Matcher) bool {
+	for _, m := range matchers {
+		log.WithFields(log.Fields{"m": m}).Debug("Matcher")
+		if m.Name != "__name__" {
+			continue
+		}
+		if m.Value == "ALERTS" || m.Value == "ALERTS_FOR_STATE" {
+			// Those are temporary, internal metrics which may generate
+			// false positives.
+			return true
+		}
+	}
+	return false
 }
 
 func getResultCount(selector string) uint64 {
