@@ -102,7 +102,8 @@ func (v *visitor) Visit(node promql.Node, path []promql.Node) (promql.Visitor, e
 
 // checkQuery parses the given query and ensures that all contained
 // selectors yield results by querying the Prometheus API.
-func checkQuery(query string) error {
+func checkQuery(query string) []error {
+	var errors []error
 	selectors, err := getSelectors(query)
 	if err != nil {
 		log.WithFields(log.Fields{"err": err}).Fatal("getSelectors failed")
@@ -133,10 +134,11 @@ func checkQuery(query string) error {
 		time.Sleep(time.Duration(*waitTime) * time.Second)
 		c := getResultCount(selector)
 		if c < 1 {
-			return fmt.Errorf("No results, possibly wrong metric name or impossible selector: %s", selector)
+			err := fmt.Errorf("No results, possibly wrong metric name or impossible selector: %s", selector)
+			errors = append(errors, err)
 		}
 	}
-	return nil
+	return errors
 }
 
 // ignoreMatchers returns true if the given metric should be
