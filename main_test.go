@@ -31,6 +31,9 @@ func TestGetSelectors(t *testing.T) {
 			"foo{a=\"1\"}",
 			"bar{a=\"1\"}",
 		},
+		"foo{a=\"1\"} offset 5m": []string{
+			"foo{a=\"1\"}",
+		},
 	}
 	for q, e := range c {
 		r, err := getSelectors(q)

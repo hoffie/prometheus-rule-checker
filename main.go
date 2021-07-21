@@ -93,7 +93,11 @@ func (v *visitor) Visit(node promql.Node, path []promql.Node) (promql.Visitor, e
 	log.WithFields(log.Fields{"node": node}).Debug("Visit")
 	switch n := node.(type) {
 	case *promql.VectorSelector:
-		v.selectors = append(v.selectors, n.String())
+		vs := promql.VectorSelector{
+			Name:          n.Name,
+			LabelMatchers: n.LabelMatchers,
+		}
+		v.selectors = append(v.selectors, vs.String())
 	default:
 		log.Debugf("Not handling %T", n)
 	}
