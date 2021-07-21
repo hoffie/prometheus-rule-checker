@@ -30,6 +30,7 @@ func main() {
 	checkRules()
 }
 
+// checkRules is the main entry point, connects to the Prometheus API, retrieves all defined rules and analyzes the PromQL expressions for dead metric references.
 func checkRules() {
 	resp, err := http.Get(fmt.Sprintf("%s/api/v1/rules", *url))
 	log.WithFields(log.Fields{"resp": resp, "err": err}).Debug("rule query result")
@@ -75,10 +76,12 @@ func checkRules() {
 	}
 }
 
+// visitor struct is used to collect selectors from a PromQL expression.
 type visitor struct {
 	selectors []string
 }
 
+// Visit is called by promql.Walk when traversing a PromQL expression's syntax tree.
 func (v *visitor) Visit(node promql.Node, path []promql.Node) (promql.Visitor, error) {
 	if node == nil {
 		return v, nil
@@ -93,6 +96,8 @@ func (v *visitor) Visit(node promql.Node, path []promql.Node) (promql.Visitor, e
 	return v, nil
 }
 
+// checkQuery parses the given query and ensures that all contained
+// selectors yield results by querying the Prometheus API.
 func checkQuery(query string) error {
 	selectors, err := getSelectors(query)
 	if err != nil {
@@ -119,6 +124,8 @@ func checkQuery(query string) error {
 	return nil
 }
 
+// ignoreMatchers returns true if the given metric should be
+// ignored.
 func ignoreMatchers(matchers []*labels.Matcher) bool {
 	for _, m := range matchers {
 		log.WithFields(log.Fields{"m": m}).Debug("Matcher")
@@ -182,6 +189,13 @@ func getResultCount(selector string) uint64 {
 	return i
 }
 
+// getSelectors parses the given PromQL query and extracts
+// all selectors.
+// Example:
+//   foo{a="1"} > bar{b="2"}
+// yields
+//   foo{a="1"}
+//   bar{a="2"}
 func getSelectors(query string) ([]string, error) {
 	expr, err := promql.ParseExpr(query)
 	if err != nil {
