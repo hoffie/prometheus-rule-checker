@@ -16,9 +16,10 @@ import (
 )
 
 var (
-	verbose  = kingpin.Flag("verbose", "Verbose mode.").Short('v').Bool()
-	url      = kingpin.Flag("prometheus.url", "prometheus base URL").Required().String()
-	waitTime = kingpin.Flag("wait.seconds", "seconds to wait between count requests").Default("0.01").Float()
+	verbose       = kingpin.Flag("verbose", "Verbose mode.").Short('v').Bool()
+	url           = kingpin.Flag("prometheus.url", "prometheus base URL").Required().String()
+	waitTime      = kingpin.Flag("wait.seconds", "seconds to wait between count requests").Default("0.01").Float()
+	expandRegexps = kingpin.Flag("expand.regexps", "whether to query a|b|c-style patterns individually").Default("true").Bool()
 )
 
 func main() {
@@ -120,12 +121,14 @@ func checkQuery(query string) error {
 			log.WithFields(log.Fields{"selector": selector}).Debug("Not checking ignored metric")
 			break
 		}
-		expanded := expandRegexpMatchers(matchers)
-		if len(expanded) != 0 {
-			for _, e := range expanded {
-				selectors = append(selectors, labelMatchersToString(e))
+		if *expandRegexps {
+			expanded := expandRegexpMatchers(matchers)
+			if len(expanded) != 0 {
+				for _, e := range expanded {
+					selectors = append(selectors, labelMatchersToString(e))
+				}
+				continue
 			}
-			continue
 		}
 		time.Sleep(time.Duration(*waitTime) * time.Second)
 		c := getResultCount(selector)
