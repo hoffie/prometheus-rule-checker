@@ -19,6 +19,21 @@ prometheus-rule-checker is configured using command line options only (see `--he
 $ ./prometheus-rule-checker --prometheus.url 127.0.0.1:9090
 ```
 
+The **default output format** is *human*.
+It can be switched to CSV via `--output.format csv` and to JSON via `--output.format json` to simplify integration into CI pipelines.
+
+Known false-positives no-result selectors can be **ignored** by specifying them in a `--ignored-selectors.regexp`.
+This option can be repeated.
+
+Query workload on the target prometheus server can be reduced by increasing the **interval between queries** via `--wait.seconds 1.5`.
+
+Regexp based matchers can usually not be tested individually.
+However, one common special case is handled explicitly:
+Rules such as `up{instance=~"a|b|c"}` can be analyzed for each regexp alternative group (i.e. `a`, `b`, `c`) by enabling this feature with `--expand.regexps`.
+
+More logging can be enabled by specifying `--verbose`.
+
+
 ## License
 This software is released under the [Apache 2.0 license](LICENSE).
 
