@@ -8,6 +8,7 @@ livetest-server:
 
 livetest-rules: build
 	./prometheus-rule-checker --prometheus.url=http://127.0.0.1:19090
+	./prometheus-rule-checker --prometheus.url=http://127.0.0.1:19090 --output.format csv
 	./prometheus-rule-checker --prometheus.url=http://127.0.0.1:19090 --output.format json
 
 .PHONY: build livetest-server livetest-rules

@@ -20,6 +20,7 @@ var (
 	url           = kingpin.Flag("prometheus.url", "prometheus base URL").Required().String()
 	waitTime      = kingpin.Flag("wait.seconds", "seconds to wait between count requests").Default("0.01").Float()
 	expandRegexps = kingpin.Flag("expand.regexps", "whether to query a|b|c-style patterns individually").Default("true").Bool()
+	outputFormat  = kingpin.Flag("output.format", "how to format results").Default("human").Enum("human", "csv", "json")
 )
 
 func main() {
@@ -69,15 +70,55 @@ func checkRules() {
 		log.WithFields(log.Fields{"status": j.Status}).Fatal("Unexpected status in rule request")
 	}
 
+	type resultItem struct {
+		File              string
+		Group             string
+		Name              string
+		Query             string
+		NoResultSelectors []string
+	}
+	var results []resultItem
 	for _, g := range j.Data.Groups {
 		for _, r := range g.Rules {
 			log.WithFields(log.Fields{"group": g.Name, "file": g.File, "name": r.Name, "query": r.Query}).Debug("Checking rule")
-			err := checkQuery(r.Query)
-			if err != nil {
-				log.WithFields(log.Fields{"group": g.Name, "file": g.File, "name": r.Name, "query": r.Query, "err": err}).Warn("Potentially broken rule")
+			selectors := getNoResultSelectors(r.Query)
+			if selectors != nil {
+				ri := resultItem{Group: g.Name, File: g.File, Name: r.Name, Query: r.Query}
+				ri.NoResultSelectors = make([]string, len(selectors))
+				copy(ri.NoResultSelectors, selectors)
+				results = append(results, ri)
 			}
 		}
 	}
+
+	switch *outputFormat {
+	case "human":
+		for _, r := range results {
+			fmt.Printf("%s -> %s -> %s\n", r.File, r.Group, r.Name)
+			fmt.Printf("  PromQL: %s\n", r.Query)
+			fmt.Print("  Selectors with no results:\n")
+			for _, selector := range r.NoResultSelectors {
+				fmt.Printf("    - %s\n", selector)
+			}
+			fmt.Printf("\n")
+		}
+	case "csv":
+		fmt.Printf("File;Group;Name;Query;Problematic selector\n")
+		for _, r := range results {
+			for _, selector := range r.NoResultSelectors {
+				fmt.Printf("%s;%s;%s;%s;%v\n", r.File, r.Group, r.Name, r.Query, selector)
+			}
+		}
+	case "json":
+		b, err := json.MarshalIndent(results, "", "  ")
+		if err != nil {
+			log.WithFields(log.Fields{"err": err}).Fatal("failed to marshal json")
+		}
+		fmt.Println(string(b))
+	default:
+		log.WithFields(log.Fields{"outputFormat": *outputFormat}).Fatal("unsupported output format")
+	}
+
 }
 
 // visitor struct is used to collect selectors from a PromQL expression.
@@ -104,10 +145,10 @@ func (v *visitor) Visit(node promql.Node, path []promql.Node) (promql.Visitor, e
 	return v, nil
 }
 
-// checkQuery parses the given query and ensures that all contained
+// getNoResultSelectors parses the given query and ensures that all contained
 // selectors yield results by querying the Prometheus API.
-func checkQuery(query string) []error {
-	var errors []error
+func getNoResultSelectors(query string) []string {
+	var noResultSelectors []string
 	selectors, err := getSelectors(query)
 	if err != nil {
 		log.WithFields(log.Fields{"err": err}).Fatal("getSelectors failed")
@@ -138,11 +179,10 @@ func checkQuery(query string) []error {
 		time.Sleep(time.Duration(*waitTime) * time.Second)
 		c := getResultCount(selector)
 		if c < 1 {
-			err := fmt.Errorf("No results, possibly wrong metric name or impossible selector: %s", selector)
-			errors = append(errors, err)
+			noResultSelectors = append(noResultSelectors, selector)
 		}
 	}
-	return errors
+	return noResultSelectors
 }
 
 // ignoreMatchers returns true if the given metric should be
