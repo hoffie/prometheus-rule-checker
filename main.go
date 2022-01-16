@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -16,11 +17,12 @@ import (
 )
 
 var (
-	verbose       = kingpin.Flag("verbose", "Verbose mode.").Short('v').Bool()
-	url           = kingpin.Flag("prometheus.url", "prometheus base URL").Required().String()
-	waitTime      = kingpin.Flag("wait.seconds", "seconds to wait between count requests").Default("0.01").Float()
-	expandRegexps = kingpin.Flag("expand.regexps", "whether to query a|b|c-style patterns individually").Default("true").Bool()
-	outputFormat  = kingpin.Flag("output.format", "how to format results").Default("human").Enum("human", "csv", "json")
+	verbose                 = kingpin.Flag("verbose", "Verbose mode.").Short('v').Bool()
+	url                     = kingpin.Flag("prometheus.url", "prometheus base URL").Required().String()
+	waitTime                = kingpin.Flag("wait.seconds", "seconds to wait between count requests").Default("0.01").Float()
+	expandRegexps           = kingpin.Flag("expand.regexps", "whether to query a|b|c-style patterns individually").Default("true").Bool()
+	outputFormat            = kingpin.Flag("output.format", "how to format results").Default("human").Enum("human", "csv", "json")
+	ignoredSelectorsRegexps = kingpin.Flag("ignored-selectors.regexp", "ignore all findings which match this regular expression; can be given multiple times").Strings()
 )
 
 func main() {
@@ -84,8 +86,15 @@ func checkRules() {
 			selectors := getNoResultSelectors(r.Query)
 			if selectors != nil {
 				ri := resultItem{Group: g.Name, File: g.File, Name: r.Name, Query: r.Query}
-				ri.NoResultSelectors = make([]string, len(selectors))
-				copy(ri.NoResultSelectors, selectors)
+				for _, selector := range selectors {
+					if isSelectorIgnored(selector) {
+						continue
+					}
+					ri.NoResultSelectors = append(ri.NoResultSelectors, selector)
+				}
+				if len(ri.NoResultSelectors) < 1 {
+					continue
+				}
 				results = append(results, ri)
 			}
 		}
@@ -119,6 +128,23 @@ func checkRules() {
 		log.WithFields(log.Fields{"outputFormat": *outputFormat}).Fatal("unsupported output format")
 	}
 
+}
+
+func isSelectorIgnored(selector string) bool {
+	if ignoredSelectorsRegexps == nil {
+		return false
+	}
+	for _, re := range *ignoredSelectorsRegexps {
+		m, err := regexp.MatchString(re, selector)
+		if err != nil {
+			log.WithFields(log.Fields{"re": re, "selector": selector, "err": err}).Fatal("failed to match ignored-selectors.regexp")
+			return false
+		}
+		if m {
+			return true
+		}
+	}
+	return false
 }
 
 // visitor struct is used to collect selectors from a PromQL expression.
