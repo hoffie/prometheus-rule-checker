@@ -12,7 +12,7 @@ Dependencies have been vendored (using `go mod vendor`) to allow for reproducibl
 
 `go get -u github.com/hoffie/prometheus-rule-checker`
 
-## Configuration
+## Usage
 prometheus-rule-checker is configured using command line options only (see `--help` and the example below):
 
 ```bash
@@ -32,6 +32,9 @@ However, one common special case is handled explicitly:
 Rules such as `up{instance=~"a|b|c"}` can be analyzed for each regexp alternative group (i.e. `a`, `b`, `c`) by enabling this feature with `--expand.regexps`.
 
 More logging can be enabled by specifying `--verbose`.
+
+The exit code is 0 if there are no findings.
+It's 1 otherwise.
 
 
 ## License

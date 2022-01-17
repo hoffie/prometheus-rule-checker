@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -34,11 +35,15 @@ func main() {
 	}
 	log.WithFields(log.Fields{"prometheus.url": *url}).Debug("Querying")
 
-	checkRules()
+	found := checkRules()
+	if found {
+		os.Exit(1)
+	}
 }
 
 // checkRules is the main entry point, connects to the Prometheus API, retrieves all defined rules and analyzes the PromQL expressions for dead metric references.
-func checkRules() {
+// Returns true if problematic rules have been found.
+func checkRules() bool {
 	resp, err := http.Get(fmt.Sprintf("%s/api/v1/rules", *url))
 	log.WithFields(log.Fields{"resp": resp, "err": err}).Debug("rule query result")
 	if err != nil {
@@ -128,6 +133,7 @@ func checkRules() {
 		log.WithFields(log.Fields{"outputFormat": *outputFormat}).Fatal("unsupported output format")
 	}
 
+	return len(results) > 0
 }
 
 func isSelectorIgnored(selector string) bool {
